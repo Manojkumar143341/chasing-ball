@@ -1,0 +1,193 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Friendly Dot Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Chasing Balls in box</h1>
+    <p id="score">Score: 0</p>
+    <p id="timer">Time Left: 30s</p>
+    <p id="previousScore" class="gameStarted">Previous Score: 0</p>
+    <div id="gameContainer">
+        <div id="friendlyDot" class="dot"></div>
+    </div>
+    <p id="gameOver">Game Over! Your final score: <span id="finalScore"></span></p>
+    <button id="restartButton">Restart Game</button>
+
+    <script>
+        let score = 0;
+        let previousScore = 0;
+        let timeLeft = 30;
+        const gameContainer = document.getElementById('gameContainer');
+        const friendlyDot = document.getElementById('friendlyDot');
+        const scoreElement = document.getElementById('score');
+        const timerElement = document.getElementById('timer');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const previousScoreElement = document.getElementById('previousScore');
+        const restartButton = document.getElementById('restartButton');
+        let chaserDots = [];
+        let enemyDots = [];
+        const maxChasers = 5;
+        const numEnemies = 2;
+        let gameInterval;
+        let timerInterval;
+
+        const dotSounds = {
+            collect: new Audio('https://www.soundjay.com/button/beep-07.wav'),
+            gameOver: new Audio('https://www.soundjay.com/button/beep-09.wav'),
+        };
+
+        function getRandomPosition() {
+            const maxX = gameContainer.offsetWidth - 20;
+            const maxY = gameContainer.offsetHeight - 20;
+            return { x: Math.random() * maxX, y: Math.random() * maxY };
+        }
+
+        function createEnemyDot() {
+            const enemyDot = document.createElement('div');
+            enemyDot.classList.add('dot', 'enemyDot');
+            const { x, y } = getRandomPosition();
+            enemyDot.style.left = `${x}px`;
+            enemyDot.style.top = `${y}px`;
+            gameContainer.appendChild(enemyDot);
+            return enemyDot;
+        }
+
+        function createChaserDot() {
+            const chaserDot = document.createElement('div');
+            chaserDot.classList.add('dot', 'chaserDot');
+            const { x, y } = getRandomPosition();
+            chaserDot.style.left = `${x}px`;
+            chaserDot.style.top = `${y}px`;
+            gameContainer.appendChild(chaserDot);
+            chaserDots.push(chaserDot);
+        }
+
+        function moveChaserDot(chaserDot, targetDot) {
+            const chaserRect = chaserDot.getBoundingClientRect();
+            const targetRect = targetDot.getBoundingClientRect();
+            const dx = targetRect.left - chaserRect.left;
+            const dy = targetRect.top - chaserRect.top;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const speed = distance > 2 ? 1 : 0;
+
+            if (distance > 2) {
+                const angle = Math.atan2(dy, dx);
+                chaserDot.style.left = `${chaserRect.left + speed * Math.cos(angle)}px`;
+                chaserDot.style.top = `${chaserRect.top + speed * Math.sin(angle)}px`;
+            }
+        }
+
+        function updateDotColors() {
+            if (score >= 10) {
+                friendlyDot.style.backgroundColor = 'purple';
+            } else if (timeLeft <= 10) {
+                friendlyDot.style.backgroundColor = 'orange';
+            } else {
+                friendlyDot.style.backgroundColor = 'blue';
+            }
+        }
+
+        function moveFriendlyDot(event) {
+            const rect = gameContainer.getBoundingClientRect();
+            const x = event.clientX - rect.left - friendlyDot.offsetWidth / 2;
+            const y = event.clientY - rect.top - friendlyDot.offsetHeight / 2;
+            friendlyDot.style.left = `${Math.max(0, Math.min(rect.width - friendlyDot.offsetWidth, x))}px`;
+            friendlyDot.style.top = `${Math.max(0, Math.min(rect.height - friendlyDot.offsetHeight, y))}px`;
+        }
+
+        function checkCollisions() {
+            const friendlyRect = friendlyDot.getBoundingClientRect();
+
+            enemyDots.forEach((enemyDot, index) => {
+                const enemyRect = enemyDot.getBoundingClientRect();
+                if (
+                    friendlyRect.left < enemyRect.right &&
+                    friendlyRect.right > enemyRect.left &&
+                    friendlyRect.top < enemyRect.bottom &&
+                    friendlyRect.bottom > enemyRect.top
+                ) {
+                    dotSounds.collect.play();
+                    score++;
+                    scoreElement.textContent = `Score: ${score}`;
+                    enemyDot.remove();
+                    enemyDots[index] = createEnemyDot();
+                    updateDotColors();
+                }
+            });
+
+            chaserDots.forEach(chaserDot => {
+                const chaserRect = chaserDot.getBoundingClientRect();
+                if (
+                    friendlyRect.left < chaserRect.right &&
+                    friendlyRect.right > chaserRect.left &&
+                    friendlyRect.top < chaserRect.bottom &&
+                    friendlyRect.bottom > chaserRect.top
+                ) {
+                    gameOver();
+                }
+            });
+        }
+
+        function gameOver() {
+            dotSounds.gameOver.play();
+            gameOverElement.style.display = 'block';
+            finalScoreElement.textContent = score;
+            previousScore = score;
+            previousScoreElement.textContent = `Previous Score: ${previousScore}`;
+            clearInterval(gameInterval);
+            clearInterval(timerInterval);
+            restartButton.style.display = 'inline-block';
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerElement.textContent = `Time Left: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    gameOver();
+                }
+            }, 1000);
+        }
+
+        function gameLoop() {
+            chaserDots.forEach(chaserDot => moveChaserDot(chaserDot, friendlyDot));
+            checkCollisions();
+
+            if (score % 5 === 0 && chaserDots.length < maxChasers) {
+                createChaserDot();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            score = 0;
+            timeLeft = 15;
+            scoreElement.textContent = `Score: 0`;
+            timerElement.textContent = `Time Left: 30s`;
+            gameOverElement.style.display = 'none';
+            restartButton.style.display = 'none'; 
+            chaserDots = [];
+            enemyDots = [];
+
+            for (let i = 0; i < numEnemies; i++) {
+                enemyDots.push(createEnemyDot());
+            }
+            createChaserDot();
+
+            startTimer();
+            gameInterval = requestAnimationFrame(gameLoop);
+        }
+
+        restartButton.addEventListener('click', startGame);
+
+        gameContainer.addEventListener('mousemove', moveFriendlyDot);
+
+        startGame();
+    </script>
+</body>
+</html>
